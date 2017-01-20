@@ -23,12 +23,12 @@ ui <- fluidPage(
           "text/comma-separated-values,text/plain",
           ".csv")
         ),
-        radioButtons("partype","ParentageType:",c("Sire Only" = "Father", "Dam Only"="Dam", "Both"="both")),
         sliderInput("threshold",
                      "Threshold:",
                      min = 0,
                      max = 1,
-                     value = 0.3)
+                     value = 0.3),
+        downloadButton("downloadData", "Download")
       ),
       
       # Show a plot of the generated distribution
@@ -55,14 +55,15 @@ server <- function(input, output) {
        return (NULL)
      }
      contents <- read.csv(file$datapath, header = TRUE)
+     partype <- "Father"
      
      output$distPlot <- renderPlot({
        # draw the histogram with the specified number of bins
        seqID <- contents$seqID
        nind <- length(seqID)
        fcolo <- rep("black", nind) 
-       EMMrate <- contents[, paste0("mmrate", input$partype)] - contents[, paste0("exp.mmrate", input$partype)]
-       plot(EMMrate ~ contents[, paste0(input$partype, "rel")], main = paste("Best", input$partype, "Matches"), xlab = "Estimated Relatedness", 
+       EMMrate <- contents[, paste0("mmrate", partype)] - contents[, paste0("exp.mmrate", partype)]
+       plot(EMMrate ~ contents[, paste0(partype, "rel")], main = paste("Best", partype, "Matches"), xlab = "Estimated Relatedness", 
             ylab = "Excess mismatch rate",col=fcolo[match(contents$seqID,seqID)], cex=0.8)
        abline(v=input$threshold, col="grey")
      })
@@ -70,6 +71,13 @@ server <- function(input, output) {
      output$contents <- renderTable({
        contents
      })
+     
+     output$downloadData <- downloadHandler(
+       filename = "matches.csv",
+       content = function(file_name){
+         write.csv(contents,file=file_name,row.names=FALSE, quote=FALSE)
+       }
+     )
    })
 }
 
