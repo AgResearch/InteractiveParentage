@@ -8,6 +8,7 @@
 #
 
 library(shiny)
+library(ggplot2)
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
@@ -23,11 +24,17 @@ ui <- fluidPage(
           "text/comma-separated-values,text/plain",
           ".csv")
         ),
-        sliderInput("threshold",
-                     "Threshold:",
+        sliderInput("rel_threshold",
+                     "Rel Threshold:",
                      min = 0,
                      max = 1,
                      value = 0.3),
+        sliderInput("emm_threshold",
+                    "Mismatch Rate Threshold:",
+                    min = 0,
+                    max = 1,
+                    step=0.001,
+                    value = 0.015),
         downloadButton("downloadData", "Download")
       ),
       
@@ -37,8 +44,11 @@ ui <- fluidPage(
           tabPanel( title="DataTable",
             tableOutput("contents")
           ),
-          tabPanel(title="Plot",
-            plotOutput("distPlot", width="640px", height="640px",hover = "plot_hover")
+          tabPanel(title="Father Plot",
+            plotOutput("distPlotFather", width="900px", height="640px",hover = "plot_hover")
+          ),
+          tabPanel(title="Mother Plot",
+                   plotOutput("distPlotMother", width="900px", height="640px",hover = "plot_hover")
           )
         )
       )
@@ -50,32 +60,68 @@ server <- function(input, output) {
   
    observe({
      
-     file = input$file1
-     if (is.null(file)){
-       return (NULL)
-     }
-     contents <- read.csv(file$datapath, header = TRUE)
-     partype <- "Father"
+     dataIn <- reactive({
+       file = input$file1
+       if (is.null(file)){
+         return (NULL)
+       }
+       df <- read.csv(file$datapath, header = TRUE)
+       return(df)
+     })
      
-     output$distPlot <- renderPlot({
-       # draw the histogram with the specified number of bins
-       seqID <- contents$seqID
-       nind <- length(seqID)
-       fcolo <- rep("black", nind) 
-       EMMrate <- contents[, paste0("mmrate", partype)] - contents[, paste0("exp.mmrate", partype)]
-       plot(EMMrate ~ contents[, paste0(partype, "rel")], main = paste("Best", partype, "Matches"), xlab = "Estimated Relatedness", 
-            ylab = "Excess mismatch rate",col=fcolo[match(contents$seqID,seqID)], cex=0.8)
-       abline(v=input$threshold, col="grey")
+     output$distPlotFather <- renderPlot({
+       
+       if(is.null(dataIn())){
+         return(NULL)
+       }
+       
+       displayData <- dataIn()
+       
+       if ("Fatherrel" %in% names(displayData)){
+       
+         # draw the histogram with the specified number of bins
+         partype <- "Father"
+         ggplot(displayData, aes(x=Fatherrel, y=mmrateFather-exp.mmrateFather, col=as.factor(BestFatherMatch)), group=as.factor(BestFatherMatch)) + 
+           geom_point() +
+           geom_vline(xintercept=input$rel_threshold) +
+           geom_hline(yintercept=input$emm_threshold)
+       }else{
+         return(NULL)
+       }
+     })
+     
+     output$distPlotMother <- renderPlot({
+       
+       if(is.null(dataIn())){
+         return(NULL)
+       }
+       
+       displayData <- dataIn()
+       
+       if ("Motherrel" %in% names(displayData)){
+         
+         # draw the histogram with the specified number of bins
+         partype <- "Mother"
+         ggplot(displayData, aes(x=Motherrel, y=mmrateMother-exp.mmrateMother, col=as.factor(BestMotherMatch)), group=as.factor(BestMotherMatch)) + 
+           geom_point() +
+           geom_vline(xintercept=input$rel_threshold) +
+           geom_hline(yintercept=input$emm_threshold)
+       }else{
+         return(NULL)
+       }
      })
      
      output$contents <- renderTable({
-       contents
+       if(is.null(dataIn())){
+         return(NULL)
+       }
+       dataIn()
      })
      
      output$downloadData <- downloadHandler(
        filename = "matches.csv",
        content = function(file_name){
-         write.csv(contents,file=file_name,row.names=FALSE, quote=FALSE)
+         write.csv(dataIn(),file=file_name,row.names=FALSE, quote=FALSE)
        }
      )
    })
